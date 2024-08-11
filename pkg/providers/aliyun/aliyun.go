@@ -226,9 +226,9 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	finalList := schema.NewResources()
 	finalList.Merge(ecsList)
+	finalList.Merge(fcList)
 	finalList.Merge(rdsList)
 	finalList.Merge(bucketList)
-	finalList.Merge(fcList)
 	return finalList, nil
 }
 
