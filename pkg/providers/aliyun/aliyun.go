@@ -12,6 +12,7 @@ import (
 	"github.com/projectdiscovery/gologger"
 	"github.com/wgpsec/lc/pkg/schema"
 	"github.com/wgpsec/lc/utils"
+	"strings"
 )
 
 type Provider struct {
@@ -30,6 +31,7 @@ type providerConfig struct {
 	accessKeySecret string
 	sessionToken    string
 	okST            bool
+	includeService  map[string]bool
 }
 
 func New(options schema.OptionBlock) (*Provider, error) {
@@ -51,11 +53,25 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	id, _ := options.GetMetadata(utils.Id)
 	sessionToken, okST := options.GetMetadata(utils.SessionToken)
 
+	isMap := make(map[string]bool)
+	includeService := ""
+	if includeService, ok = options.GetMetadata(utils.IncludeService); ok {
+		srv := strings.Split(includeService, ",")
+		for _, s := range srv {
+			isMap[s] = true
+		}
+	} else {
+		isMap[utils.AllService] = true
+	}
+
+	gologger.Info().Msgf("%s (%s) 配置文件指定列出的服务: %s", utils.Aliyun, id, includeService)
+
 	config := providerConfig{
 		accessKeyID:     accessKeyID,
 		accessKeySecret: accessKeySecret,
 		sessionToken:    sessionToken,
 		okST:            okST,
+		includeService:  isMap,
 	}
 	if okST {
 		gologger.Debug().Msg("找到阿里云访问临时访问凭证")
@@ -156,41 +172,49 @@ func New(options schema.OptionBlock) (*Provider, error) {
 
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
-	ecsProvider := &instanceProvider{id: p.id, provider: p.provider, ecsRegions: p.ecsRegions, config: p.config}
-	ecsList, err := ecsProvider.GetEcsResource(ctx)
-	gologger.Info().Msgf("获取到 %d 条阿里云 ECS 信息", len(ecsList.GetItems()))
-	if err != nil {
-		return nil, err
-	}
-	rdsProvider := &dbInstanceProvider{id: p.id, provider: p.provider, rdsRegions: p.rdsRegions, config: p.config}
-	rdsList, err := rdsProvider.GetRdsResource(ctx)
-	if err != nil {
-		return nil, err
-	}
-	gologger.Info().Msgf("获取到 %d 条阿里云 RDS 信息", len(rdsList.GetItems()))
-
-	ossProvider := &ossProvider{ossClient: p.ossClient, id: p.id, provider: p.provider}
-	buckets, err := ossProvider.GetResource(ctx)
-	if err != nil {
-		return nil, err
-	}
-	gologger.Info().Msgf("获取到 %d 条阿里云 OSS 信息", len(buckets.GetItems()))
-
-	fcProvider := functionProvider{
-		id: p.id, provider: p.provider, config: p.config,
-		fcRegions: p.fcRegions, identity: p.identity,
-	}
-	fcs, err := fcProvider.GetResource()
-	if err != nil {
-		return nil, err
+	if _, ok := p.config.includeService[utils.AliyunECS]; ok {
+		ecsProvider := &instanceProvider{id: p.id, provider: p.provider, ecsRegions: p.ecsRegions, config: p.config}
+		ecsList, err = ecsProvider.GetEcsResource(ctx)
+		gologger.Info().Msgf("获取到 %d 条阿里云 ECS 信息", len(ecsList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	gologger.Info().Msgf("获取到 %d 条阿里云 FC 信息", len(fcs.GetItems()))
+	if _, ok := p.config.includeService[utils.AliyunFC]; ok {
+		fcProvider := functionProvider{
+			id: p.id, provider: p.provider, config: p.config,
+			fcRegions: p.fcRegions, identity: p.identity,
+		}
+		fcList, err = fcProvider.GetResource()
+		if err != nil {
+			return nil, err
+		}
+		gologger.Info().Msgf("获取到 %d 条阿里云 FC 信息", len(fcList.GetItems()))
+	}
+
+	if _, ok := p.config.includeService[utils.AliyunRDS]; ok {
+		rdsProvider := &dbInstanceProvider{id: p.id, provider: p.provider, rdsRegions: p.rdsRegions, config: p.config}
+		rdsList, err = rdsProvider.GetRdsResource(ctx)
+		if err != nil {
+			return nil, err
+		}
+		gologger.Info().Msgf("获取到 %d 条阿里云 RDS 信息", len(rdsList.GetItems()))
+	}
+
+	if _, ok := p.config.includeService[utils.AliyunOSS]; ok {
+		ossProvider := &ossBucketProvider{ossClient: p.ossClient, id: p.id, provider: p.provider}
+		bucketList, err = ossProvider.GetResource(ctx)
+		if err != nil {
+			return nil, err
+		}
+		gologger.Info().Msgf("获取到 %d 条阿里云 OSS 信息", len(bucketList.GetItems()))
+	}
 
 	finalList := schema.NewResources()
 	finalList.Merge(ecsList)
 	finalList.Merge(rdsList)
-	finalList.Merge(buckets)
+	finalList.Merge(bucketList)
 	finalList.Merge(fcList)
 	return finalList, nil
 }

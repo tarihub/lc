@@ -8,14 +8,15 @@ import (
 	"strings"
 )
 
-type ossProvider struct {
+type ossBucketProvider struct {
 	id        string
 	provider  string
 	ossClient *oss.Client
 }
 
-func (d *ossProvider) GetResource(ctx context.Context) (*schema.Resources, error) {
-	ossList := schema.NewResources()
+var bucketList = schema.NewResources()
+
+func (d *ossBucketProvider) GetResource(ctx context.Context) (*schema.Resources, error) {
 	marker := oss.Marker("")
 	gologger.Debug().Msg("正在获取阿里云 OSS 资源信息")
 	for {
@@ -29,7 +30,7 @@ func (d *ossProvider) GetResource(ctx context.Context) (*schema.Resources, error
 			endpointBuilder.WriteString(bucket.Name)
 			endpointBuilder.WriteString(".oss-" + bucket.Region)
 			endpointBuilder.WriteString(".aliyuncs.com")
-			ossList.Append(&schema.Resource{
+			bucketList.Append(&schema.Resource{
 				ID:       d.id,
 				Public:   true,
 				DNSName:  endpointBuilder.String(),
@@ -40,5 +41,5 @@ func (d *ossProvider) GetResource(ctx context.Context) (*schema.Resources, error
 			break
 		}
 	}
-	return ossList, nil
+	return bucketList, nil
 }
