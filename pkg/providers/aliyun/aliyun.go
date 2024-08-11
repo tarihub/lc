@@ -58,7 +58,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if includeService, ok = options.GetMetadata(utils.IncludeService); ok {
 		srv := strings.Split(includeService, ",")
 		for _, s := range srv {
-			isMap[s] = true
+			isMap[strings.ToLower(s)] = true
 		}
 	} else {
 		isMap[utils.AllService] = true
@@ -170,9 +170,22 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}, nil
 }
 
+func (p *Provider) shouldRun(t string) bool {
+	if _, ok := p.config.includeService[utils.AllService]; ok {
+		return true
+	}
+
+	lt := strings.ToLower(t)
+	if _, ok := p.config.includeService[lt]; ok || lt == utils.AllService {
+		return true
+	}
+
+	return false
+}
+
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
-	if _, ok := p.config.includeService[utils.AliyunECS]; ok {
+	if p.shouldRun(utils.AliyunECS) {
 		ecsProvider := &instanceProvider{id: p.id, provider: p.provider, ecsRegions: p.ecsRegions, config: p.config}
 		ecsList, err = ecsProvider.GetEcsResource(ctx)
 		gologger.Info().Msgf("获取到 %d 条阿里云 ECS 信息", len(ecsList.GetItems()))
@@ -181,7 +194,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		}
 	}
 
-	if _, ok := p.config.includeService[utils.AliyunFC]; ok {
+	if p.shouldRun(utils.AliyunFC) {
 		fcProvider := functionProvider{
 			id: p.id, provider: p.provider, config: p.config,
 			fcRegions: p.fcRegions, identity: p.identity,
@@ -193,7 +206,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		gologger.Info().Msgf("获取到 %d 条阿里云 FC 信息", len(fcList.GetItems()))
 	}
 
-	if _, ok := p.config.includeService[utils.AliyunRDS]; ok {
+	if p.shouldRun(utils.AliyunRDS) {
 		rdsProvider := &dbInstanceProvider{id: p.id, provider: p.provider, rdsRegions: p.rdsRegions, config: p.config}
 		rdsList, err = rdsProvider.GetRdsResource(ctx)
 		if err != nil {
@@ -202,7 +215,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		gologger.Info().Msgf("获取到 %d 条阿里云 RDS 信息", len(rdsList.GetItems()))
 	}
 
-	if _, ok := p.config.includeService[utils.AliyunOSS]; ok {
+	if p.shouldRun(utils.AliyunOSS) {
 		ossProvider := &ossBucketProvider{ossClient: p.ossClient, id: p.id, provider: p.provider}
 		bucketList, err = ossProvider.GetResource(ctx)
 		if err != nil {
