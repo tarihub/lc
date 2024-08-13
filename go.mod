@@ -3,6 +3,7 @@ module github.com/wgpsec/lc
 go 1.22.1
 
 require (
+	github.com/alibabacloud-go/cdn-20180510/v5 v5.0.0
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.8
 	github.com/alibabacloud-go/fc-open-20210406/v2 v2.0.12
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.712

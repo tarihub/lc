@@ -185,6 +185,16 @@ func (p *Provider) shouldRun(t string) bool {
 
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
+
+	if p.shouldRun(utils.AliyunCDN) {
+		cdnProv := &cdnProvider{id: p.id, provider: p.provider, config: p.config}
+		cdnList, err = cdnProv.GetResource()
+		gologger.Info().Msgf("获取到 %d 条阿里云 CDN 信息", len(cdnList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if p.shouldRun(utils.AliyunECS) {
 		ecsProvider := &instanceProvider{id: p.id, provider: p.provider, ecsRegions: p.ecsRegions, config: p.config}
 		ecsList, err = ecsProvider.GetEcsResource(ctx)
