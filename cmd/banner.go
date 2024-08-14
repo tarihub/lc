@@ -10,8 +10,8 @@ const banner = `
 /_____/_/____/\__/   \____/_/\____/\__,_/\__,_/
 `
 
-const version = "1.0.2"
-const versionDate = "2024-8-10"
+const version = "1.0.3"
+const versionDate = "2024-8-14"
 
 func showBanner() {
 	gologger.Print().Msgf("%s\n", banner)
