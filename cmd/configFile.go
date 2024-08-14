@@ -23,7 +23,7 @@ const defaultConfigFile = `# # lc (list cloud) 的云服务商配置文件
 #   secret_key: 
 #   session_token: 
 #   # 如果指定只枚举特定云服务的资源, 以逗号分隔多个, 如果注释该字段 或 值为空 或 值为 all/ALL/aLl等, 都表示所有
-#   # aliyun: ecs/fc/oss/rds
+#   # aliyun: cdn/ecs/fc/oss/rds
 #   # 目前只有 aliyun 支持 include_service 字段
     include_service: all
     # include_service: fc
