@@ -47,11 +47,21 @@ func (c *cdnProvider) GetResource() (*schema.Resources, error) {
 		return nil, err
 	}
 
-	for _, ud := range userDomains {
+	availableDomains, err := c.describeAvailableCname(userDomains)
+	if err != nil {
+		return nil, err
+	}
+	if len(availableDomains) == 0 {
+		gologger.Debug().Msgf("未获取到解析 cname 的 cdn")
+		return cdnList, nil
+	}
+
+	for _, ud := range availableDomains {
 		if strings.ToLower(*ud.DomainStatus) != "online" {
 			gologger.Debug().Msgf("userDomain 状态为 [%s], 跳过\n", *ud.DomainStatus)
 			continue
 		}
+		privateOss := false
 		for _, s := range ud.Sources.Source {
 			// 暂时只识别私有 OSS
 			if strings.ToLower(*s.Type) != "oss" {
@@ -67,10 +77,59 @@ func (c *cdnProvider) GetResource() (*schema.Resources, error) {
 				DNSName:  fmt.Sprintf("http://%s/#private-oss_%s", *ud.DomainName, *s.Content),
 				Public:   true,
 			})
+			privateOss = true
+		}
+
+		if !privateOss {
+			cdnList.Append(&schema.Resource{
+				ID:       c.id,
+				Provider: c.provider,
+				DNSName:  fmt.Sprintf("http://%s", *ud.DomainName),
+				Public:   true,
+			})
 		}
 	}
 
 	return cdnList, nil
+}
+
+func (c *cdnProvider) describeAvailableCname(userDomains []*cdn.DescribeUserDomainsResponseBodyDomainsPageData) (
+	[]*cdn.DescribeUserDomainsResponseBodyDomainsPageData, error,
+) {
+	domains := make([]string, 0)
+	for _, ud := range userDomains {
+		domains = append(domains, *ud.DomainName)
+	}
+
+	// 定义批次大小
+	batch := 30
+	cnames := make([]*cdn.DescribeDomainCnameResponseBodyCnameDatasData, 0)
+	for i := 0; i < len(domains); i += batch {
+		end := i + batch
+		if end > len(domains) {
+			end = len(domains)
+		}
+
+		batchStr := strings.Join(domains[i:end], ",")
+
+		// 先获取 DescribeDomainCname 其中 Cname 不为空字符串表示已配置 每次最多查询30个
+		ddcReq := &cdn.DescribeDomainCnameRequest{DomainName: &batchStr}
+		cnameRes, err := c.client.DescribeDomainCname(ddcReq)
+		if err != nil {
+			gologger.Debug().Msgf("调用 cdn DescribeDomainCname req: %v 失败: %v\n", ddcReq, err)
+			return nil, err
+		}
+		cnames = append(cnames, cnameRes.Body.CnameDatas.Data...)
+	}
+
+	availableDomains := make([]*cdn.DescribeUserDomainsResponseBodyDomainsPageData, 0)
+	for idx, cname := range cnames {
+		if *cname.Cname != "" {
+			availableDomains = append(availableDomains, userDomains[idx])
+		}
+	}
+
+	return availableDomains, nil
 }
 
 func (c *cdnProvider) describeCdnUserDomains() ([]*cdn.DescribeUserDomainsResponseBodyDomainsPageData, error) {
