@@ -23,6 +23,7 @@ const (
 const (
 	AllService = "all"
 	AliyunCDN  = "cdn"
+	AliyunDCDN = "dcdn"
 	AliyunECS  = "ecs"
 	AliyunFC   = "fc"
 	AliyunOSS  = "oss"

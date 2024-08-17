@@ -195,6 +195,15 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		}
 	}
 
+	if p.shouldRun(utils.AliyunDCDN) {
+		dcdnProv := &dcdnProvider{id: p.id, provider: p.provider, config: p.config}
+		dcdnList, err = dcdnProv.GetResource()
+		gologger.Info().Msgf("获取到 %d 条阿里云 DCDN 信息", len(dcdnList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if p.shouldRun(utils.AliyunECS) {
 		ecsProvider := &instanceProvider{id: p.id, provider: p.provider, ecsRegions: p.ecsRegions, config: p.config}
 		ecsList, err = ecsProvider.GetEcsResource(ctx)
@@ -236,6 +245,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	finalList := schema.NewResources()
 	finalList.Merge(cdnList)
+	finalList.Merge(dcdnList)
 	finalList.Merge(ecsList)
 	finalList.Merge(fcList)
 	finalList.Merge(rdsList)
