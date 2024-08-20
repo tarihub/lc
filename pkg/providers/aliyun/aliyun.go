@@ -3,6 +3,7 @@ package aliyun
 import (
 	"context"
 	"fmt"
+	es "github.com/alibabacloud-go/elasticsearch-20170613/v3/client"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
@@ -21,6 +22,7 @@ type Provider struct {
 	config     providerConfig
 	ossClient  *oss.Client
 	ecsRegions *ecs.DescribeRegionsResponse
+	esRegions  *es.DescribeRegionsResponse
 	rdsRegions *rds.DescribeRegionsResponse
 	fcRegions  []FcRegion
 	identity   *sts.GetCallerIdentityResponse
@@ -133,6 +135,20 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}
 	gologger.Debug().Msg("阿里云 ECS 区域信息获取成功")
 
+	// es client
+	esProvider := elasticSearchProvider{id: id, provider: utils.Aliyun, config: config}
+	esConfig := esProvider.newEsConfig(region)
+	esClient, err := es.NewClient(esConfig)
+	if err != nil {
+		gologger.Debug().Msgf("%s endpoint NewClient err: %s", *esConfig.Endpoint, err)
+		return nil, err
+	}
+	// es regions
+	esRegions, err := esClient.DescribeRegions()
+	if err != nil {
+		return nil, err
+	}
+
 	// rds client
 	rdsConfig := sdk.NewConfig()
 	if okST {
@@ -166,7 +182,8 @@ func New(options schema.OptionBlock) (*Provider, error) {
 
 	return &Provider{
 		provider: utils.Aliyun, id: id, config: config, identity: identity,
-		ossClient: ossClient, ecsRegions: ecsRegions, rdsRegions: rdsRegions, fcRegions: fcRegions,
+		ossClient: ossClient, ecsRegions: ecsRegions, esRegions: esRegions,
+		rdsRegions: rdsRegions, fcRegions: fcRegions,
 	}, nil
 }
 
@@ -213,6 +230,15 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		}
 	}
 
+	if p.shouldRun(utils.AliyunES) {
+		esProvider := &elasticSearchProvider{id: p.id, provider: p.provider, esRegions: p.esRegions, config: p.config}
+		esList, err = esProvider.GetEsResource(ctx)
+		gologger.Info().Msgf("获取到 %d 条阿里云 ES 信息", len(esList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if p.shouldRun(utils.AliyunFC) {
 		fcProvider := functionProvider{
 			id: p.id, provider: p.provider, config: p.config,
@@ -247,6 +273,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	finalList.Merge(cdnList)
 	finalList.Merge(dcdnList)
 	finalList.Merge(ecsList)
+	finalList.Merge(esList)
 	finalList.Merge(fcList)
 	finalList.Merge(rdsList)
 	finalList.Merge(bucketList)

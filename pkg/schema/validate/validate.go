@@ -66,6 +66,7 @@ const (
 	DNSName ResourceType = iota + 1
 	PublicIP
 	PrivateIP
+	URL
 	None
 )
 
@@ -78,6 +79,7 @@ func (v *Validator) Identify(item string) ResourceType {
 	if v.isDNSName(item, parsed) {
 		return DNSName
 	}
+	// FIXME 这块补上 URL 校验逻辑
 	if parsed == nil {
 		return None
 	}

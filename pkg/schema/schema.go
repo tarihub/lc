@@ -42,6 +42,7 @@ type Resource struct {
 	PublicIPv4  string `json:"public_ipv4,omitempty"`
 	PrivateIpv4 string `json:"private_ipv4,omitempty"`
 	DNSName     string `json:"dns_name,omitempty"`
+	URL         string `json:"url,omitempty"`
 }
 
 type Options []OptionBlock
@@ -73,6 +74,18 @@ func (r *Resources) appendResource(resource *Resource, uniqueMap *sync.Map) {
 		r.appendResourceWithTypeAndMeta(resourceType, resource.PrivateIpv4, resource.ID, resource.Provider)
 		uniqueMap.Store(resource.PrivateIpv4, struct{}{})
 	}
+	if _, ok := uniqueMap.Load(resource.URL); !ok && resource.URL != "" {
+		// FIXME 这块逻辑得加上 URL 参数校验
+		//resourceType := validator.Identify(resource.URL)
+		//r.appendResourceWithTypeAndMeta(resourceType, resource.PrivateIpv4, resource.ID, resource.Provider)
+		r.AppendItem(&Resource{
+			Provider: resource.Provider,
+			ID:       resource.ID,
+			URL:      resource.URL,
+		})
+		uniqueMap.Store(resource.URL, struct{}{})
+	}
+
 }
 
 func (r *Resources) appendResourceWithTypeAndMeta(resourceType validate.ResourceType, item, id, provider string) {

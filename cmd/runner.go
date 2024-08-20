@@ -100,6 +100,14 @@ func (r *Runner) Enumerate() {
 				builder.Reset()
 				gologger.Silent().Msgf("%s", instance.PrivateIpv4)
 			}
+			if instance.URL != "" {
+				Count++
+				builder.WriteString(instance.URL)
+				builder.WriteRune('\n')
+				output.WriteString(builder.String()) //nolint
+				builder.Reset()
+				gologger.Silent().Msgf("%s", instance.URL)
+			}
 		}
 		if Count == 0 {
 			gologger.Info().Msgf("在 %s (%s) 下未发现资产，这一般是由于权限不足或没有资产。", provider.Name(), provider.ID())

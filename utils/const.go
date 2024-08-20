@@ -25,6 +25,7 @@ const (
 	AliyunCDN  = "cdn"
 	AliyunDCDN = "dcdn"
 	AliyunECS  = "ecs"
+	AliyunES   = "es"
 	AliyunFC   = "fc"
 	AliyunOSS  = "oss"
 	AliyunRDS  = "rds"
