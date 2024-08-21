@@ -75,14 +75,7 @@ func (r *Resources) appendResource(resource *Resource, uniqueMap *sync.Map) {
 		uniqueMap.Store(resource.PrivateIpv4, struct{}{})
 	}
 	if _, ok := uniqueMap.Load(resource.URL); !ok && resource.URL != "" {
-		// FIXME 这块逻辑得加上 URL 参数校验
-		//resourceType := validator.Identify(resource.URL)
-		//r.appendResourceWithTypeAndMeta(resourceType, resource.PrivateIpv4, resource.ID, resource.Provider)
-		r.AppendItem(&Resource{
-			Provider: resource.Provider,
-			ID:       resource.ID,
-			URL:      resource.URL,
-		})
+		r.appendResourceWithTypeAndMeta(validate.URL, resource.PrivateIpv4, resource.ID, resource.Provider)
 		uniqueMap.Store(resource.URL, struct{}{})
 	}
 
