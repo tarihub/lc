@@ -75,7 +75,8 @@ func (r *Resources) appendResource(resource *Resource, uniqueMap *sync.Map) {
 		uniqueMap.Store(resource.PrivateIpv4, struct{}{})
 	}
 	if _, ok := uniqueMap.Load(resource.URL); !ok && resource.URL != "" {
-		r.appendResourceWithTypeAndMeta(validate.URL, resource.PrivateIpv4, resource.ID, resource.Provider)
+		// 感觉得在这里单独做校验, Identify 的逻辑 URL 格式逻辑，里面一直加会比较臃肿
+		r.appendResourceWithTypeAndMeta(validate.URL, resource.URL, resource.ID, resource.Provider)
 		uniqueMap.Store(resource.URL, struct{}{})
 	}
 
@@ -95,6 +96,8 @@ func (r *Resources) appendResourceWithTypeAndMeta(resourceType validate.Resource
 		resource.PublicIPv4 = item
 	case validate.PrivateIP:
 		resource.PrivateIpv4 = item
+	case validate.URL:
+		resource.URL = item
 	default:
 		return
 	}

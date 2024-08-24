@@ -88,11 +88,11 @@ func (e *elasticSearchProvider) describeEsDetail(ems []esMeta) error {
 			)
 			return nil
 		}
-		kibanaPublicUrl := fmt.Sprintf("%s://%s:%d/", strings.ToLower(*esDetail.Protocol), *esDetail.KibanaDomain, *esDetail.KibanaPort)
+		kibanaPublicUrl := fmt.Sprintf("%s:%d", *esDetail.KibanaDomain, *esDetail.KibanaPort)
 		esList.Append(&schema.Resource{
 			ID:       e.id,
 			Public:   true,
-			URL:      kibanaPublicUrl,
+			DNSName:  kibanaPublicUrl,
 			Provider: e.provider,
 		})
 	}
