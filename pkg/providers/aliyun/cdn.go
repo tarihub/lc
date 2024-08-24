@@ -25,6 +25,7 @@ func (c *cdnProvider) newClient() (*cdn.Client, error) {
 	client := &openapi.Config{
 		AccessKeyId:     &c.config.accessKeyID,
 		AccessKeySecret: &c.config.accessKeySecret,
+		SecurityToken:   &c.config.sessionToken,
 		Endpoint:        &endpoint,
 	}
 
