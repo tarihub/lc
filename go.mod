@@ -4,6 +4,7 @@ go 1.22.1
 
 require (
 	github.com/alibabacloud-go/cdn-20180510/v5 v5.0.0
+	github.com/alibabacloud-go/cloudapi-20160714/v5 v5.4.2
 	github.com/alibabacloud-go/darabonba-openapi/v2 v2.0.9
 	github.com/alibabacloud-go/dcdn-20180115/v3 v3.4.0
 	github.com/alibabacloud-go/elasticsearch-20170613/v3 v3.0.6
