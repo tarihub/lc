@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	es "github.com/alibabacloud-go/elasticsearch-20170613/v3/client"
+	slb "github.com/alibabacloud-go/slb-20140515/v4/client"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
@@ -21,6 +22,7 @@ type Provider struct {
 	provider   string
 	config     providerConfig
 	ossClient  *oss.Client
+	clbRegions *slb.DescribeRegionsResponse
 	ecsRegions *ecs.DescribeRegionsResponse
 	esRegions  *es.DescribeRegionsResponse
 	rdsRegions *rds.DescribeRegionsResponse
@@ -112,6 +114,17 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}
 	gologger.Debug().Msg("阿里云 OSS 客户端创建成功")
 
+	// clb client
+	clbProvider := classicLoadBalancerProvider{id: id, provider: utils.Aliyun, config: config}
+	clbConfig := clbProvider.newSlbConfig(region)
+	clbClient, err := slb.NewClient(clbConfig)
+	if err != nil {
+		gologger.Debug().Msgf("%s endpoint NewClient err: %s", *clbClient.Endpoint, err)
+		return nil, err
+	}
+	// es regions
+	clbRegions, err := clbClient.DescribeRegions(&slb.DescribeRegionsRequest{})
+
 	// ecs client
 	ecsConfig := sdk.NewConfig()
 	if okST {
@@ -148,6 +161,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
+	gologger.Debug().Msg("阿里云 ES 区域信息获取成功")
 
 	// rds client
 	rdsConfig := sdk.NewConfig()
@@ -182,7 +196,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 
 	return &Provider{
 		provider: utils.Aliyun, id: id, config: config, identity: identity,
-		ossClient: ossClient, ecsRegions: ecsRegions, esRegions: esRegions,
+		ossClient: ossClient, clbRegions: clbRegions, ecsRegions: ecsRegions, esRegions: esRegions,
 		rdsRegions: rdsRegions, fcRegions: fcRegions,
 	}, nil
 }
@@ -216,6 +230,16 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 		dcdnProv := &dcdnProvider{id: p.id, provider: p.provider, config: p.config}
 		dcdnList, err = dcdnProv.GetResource()
 		gologger.Info().Msgf("获取到 %d 条阿里云 DCDN 信息", len(dcdnList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// 非 EIP, 只获取传统负载均衡 (clb) 固定公网 ip, eip 应在 eip 获取
+	if p.shouldRun(utils.AliyunCLB) {
+		clbProv := &classicLoadBalancerProvider{id: p.id, provider: p.provider, config: p.config}
+		clbList, err = clbProv.GetResource()
+		gologger.Info().Msgf("获取到 %d 条阿里云 CLB 信息", len(clbList.GetItems()))
 		if err != nil {
 			return nil, err
 		}
@@ -272,6 +296,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	finalList := schema.NewResources()
 	finalList.Merge(cdnList)
 	finalList.Merge(dcdnList)
+	finalList.Merge(clbList)
 	finalList.Merge(ecsList)
 	finalList.Merge(esList)
 	finalList.Merge(fcList)

@@ -19,15 +19,10 @@ type elasticSearchProvider struct {
 	esRegions *es.DescribeRegionsResponse
 }
 
-type esMeta struct {
-	ResourceId string
-	RegionId   string
-}
-
 var esList = schema.NewResources()
 
 func (e *elasticSearchProvider) GetEsResource(ctx context.Context) (*schema.Resources, error) {
-	var ems []esMeta
+	var ems []ResourceMeta
 	var regions []string
 	esResources, err := e.availableEsResource()
 	if err != nil {
@@ -42,7 +37,7 @@ func (e *elasticSearchProvider) GetEsResource(ctx context.Context) (*schema.Reso
 		}
 	} else {
 		for _, esr := range esResources {
-			ems = append(ems, esMeta{*esr.ResourceId, *esr.RegionId})
+			ems = append(ems, ResourceMeta{*esr.ResourceId, *esr.RegionId})
 		}
 	}
 
@@ -54,7 +49,7 @@ func (e *elasticSearchProvider) GetEsResource(ctx context.Context) (*schema.Reso
 	return esList, nil
 }
 
-func (e *elasticSearchProvider) describeEsDetail(ems []esMeta) error {
+func (e *elasticSearchProvider) describeEsDetail(ems []ResourceMeta) error {
 	for _, em := range ems {
 		esConfig := e.newEsConfig(em.RegionId)
 		esClient, err := es.NewClient(esConfig)
@@ -100,8 +95,8 @@ func (e *elasticSearchProvider) describeEsDetail(ems []esMeta) error {
 	return nil
 }
 
-func (e *elasticSearchProvider) describeEsMeta(regions []string) ([]esMeta, error) {
-	var ems []esMeta
+func (e *elasticSearchProvider) describeEsMeta(regions []string) ([]ResourceMeta, error) {
+	var ems []ResourceMeta
 	for _, region := range regions {
 		esConfig := e.newEsConfig(region)
 		esClient, err := es.NewClient(esConfig)
@@ -116,7 +111,7 @@ func (e *elasticSearchProvider) describeEsMeta(regions []string) ([]esMeta, erro
 		}
 
 		for _, esi := range instances.Body.Result {
-			ems = append(ems, esMeta{*esi.InstanceId, region})
+			ems = append(ems, ResourceMeta{*esi.InstanceId, region})
 		}
 
 		maxPage := *instances.Body.Headers.XTotalCount
@@ -127,7 +122,7 @@ func (e *elasticSearchProvider) describeEsMeta(regions []string) ([]esMeta, erro
 				return nil, err
 			}
 			for _, esi := range instances.Body.Result {
-				ems = append(ems, esMeta{*esi.InstanceId, region})
+				ems = append(ems, ResourceMeta{*esi.InstanceId, region})
 			}
 		}
 	}
@@ -148,7 +143,7 @@ func (e *elasticSearchProvider) newEsConfig(region string) *openapi.Config {
 
 // availableRegions 有两种获取 region 的方式, 如果枚举式会比较慢, 走资源中心会比较快，但需要的 ak 权限需要资源中心/管理的权限
 func (e *elasticSearchProvider) availableEsResource() ([]*rc.SearchResourcesResponseBodyResources, error) {
-	rConfig := newResourceCenterConfig(e.config.accessKeyID, e.config.accessKeySecret, e.config.sessionToken)
+	rConfig := NewResourceCenterConfig(e.config.accessKeyID, e.config.accessKeySecret, e.config.sessionToken)
 	rClient, err := rc.NewClient(rConfig)
 	if err != nil {
 		return nil, err
@@ -162,40 +157,10 @@ func (e *elasticSearchProvider) availableEsResource() ([]*rc.SearchResourcesResp
 		Filter:     []*rc.SearchResourcesRequestFilter{filter0},
 		MaxResults: tea.Int32(50),
 	}
-	resources, err := searchResource(rClient, srReq)
+	resources, err := SearchResource(rClient, srReq)
 	if err != nil {
 		return nil, err
 	}
 
-	return resources, nil
-}
-
-func newResourceCenterConfig(ak, sk, st string) *openapi.Config {
-	endpoint := "resourcecenter.aliyuncs.com"
-	return &openapi.Config{
-		AccessKeyId:     &ak,
-		AccessKeySecret: &sk,
-		SecurityToken:   &st,
-		Endpoint:        &endpoint,
-	}
-}
-
-func searchResource(client *rc.Client, srReq *rc.SearchResourcesRequest) (resources []*rc.SearchResourcesResponseBodyResources, err error) {
-	for {
-		sResult, err := client.SearchResources(srReq)
-		if err != nil {
-			gologger.Debug().Msgf("%v SearchResources err: %v\n", srReq, err)
-			return nil, err
-		}
-
-		resources = append(resources, sResult.Body.Resources...)
-
-		if sResult.Body.NextToken == nil {
-			break
-		}
-		gologger.Debug().Msgf("NextToken 不为空，正在获取下一页数据")
-		srReq.NextToken = sResult.Body.NextToken
-
-	}
 	return resources, nil
 }

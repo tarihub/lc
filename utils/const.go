@@ -24,6 +24,7 @@ const (
 	AllService = "all"
 	AliyunCDN  = "cdn"
 	AliyunDCDN = "dcdn"
+	AliyunCLB  = "clb"
 	AliyunECS  = "ecs"
 	AliyunES   = "es"
 	AliyunFC   = "fc"
