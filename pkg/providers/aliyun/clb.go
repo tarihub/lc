@@ -63,13 +63,13 @@ func (c *classicLoadBalancerProvider) describeClbAttr(clbMs []ResourceMeta) erro
 		}
 		clbAttr := clbAttrRes.Body
 
-		if clbAttr.AddressType == nil || clbAttr.Address == nil {
-			gologger.Debug().Msgf("[skip] %s %s AddressType: %v, Address: %v\n",
-				clbm.RegionId, clbm.ResourceId, clbAttr.AddressType, clbAttr.Address,
+		if clbAttr.AddressType == nil || clbAttr.Address == nil || clbAttr.LoadBalancerStatus == nil {
+			gologger.Debug().Msgf("[skip] %s %s AddressType: %v, Address: %v, LoadBalancerStatus: %v\n",
+				clbm.RegionId, clbm.ResourceId, clbAttr.AddressType, clbAttr.Address, clbAttr.LoadBalancerStatus,
 			)
 			return nil
 		}
-		if strings.ToLower(*clbAttr.AddressType) != "internet" {
+		if strings.ToLower(*clbAttr.LoadBalancerStatus) != "active" || strings.ToLower(*clbAttr.AddressType) != "internet" {
 			continue
 		}
 		clbList.Append(&schema.Resource{
