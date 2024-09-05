@@ -25,14 +25,14 @@ func (c *classicLoadBalancerProvider) GetResource() (*schema.Resources, error) {
 	var regions []string
 	clbResources, err := c.availableClbResource()
 	if err != nil {
-		regions = regions[:0]
 		for _, region := range c.clbRegions.Body.Regions.Region {
 			regions = append(regions, *region.RegionId)
 		}
 
 		clbMs, err = c.describeClbMeta(regions)
 		if err != nil {
-			return esList, err
+			gologger.Debug().Msgf("调用 clb describeClbMeta 失败: %v\n", err)
+			return esList, nil
 		}
 	} else {
 		for _, clbr := range clbResources {
@@ -126,14 +126,14 @@ func (c *classicLoadBalancerProvider) describeClbMeta(regions []string) ([]Resou
 			return nil, err
 		}
 
-		lbReq := &slb.DescribeLoadBalancersRequest{}
+		lbReq := &slb.DescribeLoadBalancersRequest{RegionId: &region}
 		lbsResp, err := clbClient.DescribeLoadBalancers(lbReq)
 		if err != nil {
 			return nil, err
 		}
 
 		for _, lb := range lbsResp.Body.LoadBalancers.LoadBalancer {
-			clbMs = append(clbMs, ResourceMeta{*lb.LoadBalancerSpec, region})
+			clbMs = append(clbMs, ResourceMeta{*lb.LoadBalancerId, region})
 		}
 
 		maxPage := *lbsResp.Body.TotalCount
@@ -144,7 +144,7 @@ func (c *classicLoadBalancerProvider) describeClbMeta(regions []string) ([]Resou
 				return nil, err
 			}
 			for _, lb := range lbsResp.Body.LoadBalancers.LoadBalancer {
-				clbMs = append(clbMs, ResourceMeta{*lb.LoadBalancerSpec, region})
+				clbMs = append(clbMs, ResourceMeta{*lb.LoadBalancerId, region})
 			}
 		}
 	}

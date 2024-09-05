@@ -122,8 +122,12 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		gologger.Debug().Msgf("%s endpoint NewClient err: %s", *clbClient.Endpoint, err)
 		return nil, err
 	}
-	// es regions
+	// clb regions
 	clbRegions, err := clbClient.DescribeRegions(&slb.DescribeRegionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	gologger.Debug().Msg("阿里云 CLB 区域信息获取成功")
 
 	// ecs client
 	ecsConfig := sdk.NewConfig()
@@ -237,7 +241,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	// 非 EIP, 只获取传统负载均衡 (clb) 固定公网 ip, eip 应在 eip 获取
 	if p.shouldRun(utils.AliyunCLB) {
-		clbProv := &classicLoadBalancerProvider{id: p.id, provider: p.provider, config: p.config}
+		clbProv := &classicLoadBalancerProvider{id: p.id, provider: p.provider, clbRegions: p.clbRegions, config: p.config}
 		clbList, err = clbProv.GetResource()
 		gologger.Info().Msgf("获取到 %d 条阿里云 CLB 信息", len(clbList.GetItems()))
 		if err != nil {

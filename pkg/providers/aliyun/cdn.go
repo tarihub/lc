@@ -38,19 +38,20 @@ func (c *cdnProvider) GetResource() (*schema.Resources, error) {
 	c.client, err = c.newClient()
 	if err != nil {
 		gologger.Debug().Msgf("初始化 cdn client 失败: %v\n", err)
-		return nil, err
+		return cdnList, nil
 	}
 	gologger.Debug().Msg("正在获取阿里云 CDN 资源信息")
 
 	userDomains, err := c.describeCdnUserDomains()
 	if err != nil {
 		gologger.Debug().Msgf("调用 cdn DescribeUserDomains 失败: %v\n", err)
-		return nil, err
+		return cdnList, nil
 	}
 
 	availableDomains, err := c.describeAvailableCname(userDomains)
 	if err != nil {
-		return nil, err
+		gologger.Debug().Msgf("调用 cdn describeAvailableCname 失败: %v\n", err)
+		return cdnList, nil
 	}
 	if len(availableDomains) == 0 {
 		gologger.Debug().Msgf("未获取到解析 cname 的 cdn")

@@ -38,14 +38,14 @@ func (c *dcdnProvider) GetResource() (*schema.Resources, error) {
 	c.client, err = c.newClient()
 	if err != nil {
 		gologger.Debug().Msgf("初始化 dcdn client 失败: %v\n", err)
-		return nil, err
+		return dcdnList, nil
 	}
 	gologger.Debug().Msg("正在获取阿里云 DCDN 资源信息")
 
 	userDomains, err := c.describeDcdnUserDomains()
 	if err != nil {
 		gologger.Debug().Msgf("调用 dcdn DescribeUserDomains 失败: %v\n", err)
-		return nil, err
+		return dcdnList, nil
 	}
 
 	availableDomains, err := c.describeAvailableCname(userDomains)

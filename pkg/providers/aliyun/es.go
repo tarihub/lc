@@ -33,7 +33,8 @@ func (e *elasticSearchProvider) GetEsResource(ctx context.Context) (*schema.Reso
 
 		ems, err = e.describeEsMeta(regions)
 		if err != nil {
-			return esList, err
+			gologger.Debug().Msgf("调用 es describeEsMeta 失败: %v\n", err)
+			return esList, nil
 		}
 	} else {
 		for _, esr := range esResources {
