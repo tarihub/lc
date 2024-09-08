@@ -148,7 +148,7 @@ func (c *cdnProvider) describeCdnUserDomains() ([]*cdn.DescribeUserDomainsRespon
 	userDomains := userDomainRes.Body.Domains.PageData
 
 	// 分页读取所有域名, 这里有多个强转是因为 阿里云官方的 sdk 有点奇怪, 请求参数和返回值 同一个参数, 类型不一样...
-	for currentPage := 2; int64(currentPage) <= totalPages; currentPage++ {
+	for currentPage := 1; int64(currentPage) < totalPages; currentPage++ {
 		currentPage32 := int32(currentPage)
 		dudReq.PageNumber = &currentPage32
 		userDomainRes, err = c.client.DescribeUserDomains(dudReq)

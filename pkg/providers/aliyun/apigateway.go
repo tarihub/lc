@@ -5,11 +5,9 @@ import (
 	apigw "github.com/alibabacloud-go/cloudapi-20160714/v5/client"
 	cloudapi "github.com/alibabacloud-go/cloudapi-20160714/v5/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
-	rc "github.com/alibabacloud-go/resourcecenter-20221201/client"
-	"github.com/alibabacloud-go/tea/tea"
 	"github.com/projectdiscovery/gologger"
 	"github.com/wgpsec/lc/pkg/schema"
-	"strings"
+	"sync"
 )
 
 type apiGatewayProvider struct {
@@ -17,12 +15,6 @@ type apiGatewayProvider struct {
 	provider     string
 	config       providerConfig
 	apiGWRegions *cloudapi.DescribeRegionsResponse
-}
-
-type ApisMeta struct {
-	GroupId    string
-	ResourceId string
-	RegionId   string
 }
 
 var apiGwList = schema.NewResources()
@@ -44,123 +36,111 @@ func (a *apiGatewayProvider) newApiGwConfig(region string) *openapi.Config {
 //
 // 不过从为了获取对外暴露域名这个视角, 还是一个个枚举 region 更全, 毕竟上面说的情况用走资源中心会有漏的, 虽然效率慢了点点
 func (a *apiGatewayProvider) GetResource() (*schema.Resources, error) {
-	var apiGwMs []ApisMeta
-	var regions []string
-	apiGwResources, err := a.availableApiGwResource()
-	if err != nil {
-		for _, region := range a.apiGWRegions.Body.Regions.Region {
-			regions = append(regions, *region.RegionId)
-		}
+	var (
+		threads int
+		err     error
+		wg      sync.WaitGroup
+		regions []string
+	)
+	threads = schema.GetThreads()
 
-		apiGwMs, err = a.describeApiGwMeta(regions)
-		if err != nil {
-			gologger.Debug().Msgf("调用 apigateway describeApiGwMeta 失败: %v\n", err)
-			return apiGwList, nil
-		}
-	} else {
-		for _, apiGwR := range apiGwResources {
-			apiGwMs = append(apiGwMs, ApisMeta{*apiGwR.ResourceGroupId, *apiGwR.ResourceId, *apiGwR.RegionId})
-		}
+	for _, region := range a.apiGWRegions.Body.Regions.Region {
+		regions = append(regions, *region.RegionId)
 	}
 
-	err = a.describeApiGroupAttr(apiGwMs)
-	if err != nil {
-		return apiGwList, err
+	taskCh := make(chan string, threads)
+	for i := 0; i < threads; i++ {
+		wg.Add(1)
+		go func() {
+			err = a.describeApiGroup(taskCh, &wg)
+			if err != nil {
+				return
+			}
+		}()
 	}
 
+	for _, item := range regions {
+		taskCh <- item
+	}
+	close(taskCh)
+	wg.Wait()
 	return apiGwList, nil
 
 }
 
-func (a *apiGatewayProvider) availableApiGwResource() ([]*rc.SearchResourcesResponseBodyResources, error) {
-	rConfig := NewResourceCenterConfig(a.config.accessKeyID, a.config.accessKeySecret, a.config.sessionToken)
-	rClient, err := rc.NewClient(rConfig)
-	if err != nil {
-		return nil, err
-	}
+func (a *apiGatewayProvider) describeApiGroup(ch <-chan string, wg *sync.WaitGroup) error {
+	defer wg.Done()
 
-	filter0 := &rc.SearchResourcesRequestFilter{
-		Key:   tea.String("ResourceType"),
-		Value: []*string{tea.String("ACS::ApiGateway::Api")},
-	}
-	srReq := &rc.SearchResourcesRequest{
-		Filter:     []*rc.SearchResourcesRequestFilter{filter0},
-		MaxResults: tea.Int32(50),
-	}
-	resources, err := SearchResource(rClient, srReq)
-	if err != nil {
-		return nil, err
-	}
-
-	return resources, nil
-}
-
-func (a *apiGatewayProvider) describeApiGwMeta(regions []string) ([]ApisMeta, error) {
-	var apiGwMs []ApisMeta
-	for _, region := range regions {
+	for region := range ch {
 		apiGwConfig := a.newApiGwConfig(region)
 		apiGwClient, err := apigw.NewClient(apiGwConfig)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		agApisReq := &cloudapi.DescribeApisRequest{}
-		apiGwApisResp, err := apiGwClient.DescribeApis(agApisReq)
+		agIds, err := a.describeApiGroupIds(apiGwClient)
 		if err != nil {
-			return nil, err
+			gologger.Debug().Msgf("调用 describeApiGroupIds 失败: %v\n", err)
+			return err
 		}
 
-		for _, agApi := range apiGwApisResp.Body.ApiSummarys.ApiSummary {
-			apiGwMs = append(apiGwMs, ApisMeta{*agApi.GroupId, *agApi.ApiId, region})
-		}
-
-		maxPage := *apiGwApisResp.Body.TotalCount
-		for i := int32(1); i < maxPage; i++ {
-			agApisReq.PageNumber = &i
-			apiGwApisResp, err = apiGwClient.DescribeApis(agApisReq)
+		for _, agId := range agIds {
+			agReq := &cloudapi.DescribeApiGroupRequest{GroupId: agId}
+			agResp, err := apiGwClient.DescribeApiGroup(agReq)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			for _, agApi := range apiGwApisResp.Body.ApiSummarys.ApiSummary {
-				apiGwMs = append(apiGwMs, ApisMeta{*agApi.GroupId, *agApi.ApiId, region})
+			ag := agResp.Body
+			if len(ag.CustomDomains.DomainItem) == 0 {
+				apiGwList.Append(&schema.Resource{
+					ID:       a.id,
+					Public:   true,
+					DNSName:  *ag.SubDomain,
+					Provider: a.provider,
+				})
+				continue
+			}
+
+			for _, domain := range ag.CustomDomains.DomainItem {
+				apiGwList.Append(&schema.Resource{
+					ID:       a.id,
+					Public:   true,
+					URL:      fmt.Sprintf("%s/#apigateway_%s", *domain.DomainName, *apiGwClient.RegionId),
+					Provider: a.provider,
+				})
 			}
 		}
-	}
-
-	return apiGwMs, nil
-}
-
-func (a *apiGatewayProvider) describeApiAttr(apisMs []ApisMeta) error {
-	for _, apim := range apisMs {
-		apiGwConfig := a.newApiGwConfig(apim.RegionId)
-		apiGwClient, err := apigw.NewClient(apiGwConfig)
-		if err != nil {
-			return err
-		}
-
-		lbaReq := &apigw.DescribeApiRequest{}
-		clbAttrRes, err := clbClient.DescribeLoadBalancerAttribute(lbaReq)
-		if err != nil {
-			return err
-		}
-		clbAttr := clbAttrRes.Body
-
-		if clbAttr.AddressType == nil || clbAttr.Address == nil || clbAttr.LoadBalancerStatus == nil {
-			gologger.Debug().Msgf("[skip] %s %s AddressType: %v, Address: %v, LoadBalancerStatus: %v\n",
-				clbm.RegionId, clbm.ResourceId, clbAttr.AddressType, clbAttr.Address, clbAttr.LoadBalancerStatus,
-			)
-			return nil
-		}
-		if strings.ToLower(*clbAttr.LoadBalancerStatus) != "active" || strings.ToLower(*clbAttr.AddressType) != "internet" {
-			continue
-		}
-		clbList.Append(&schema.Resource{
-			ID:         c.id,
-			Public:     true,
-			PublicIPv4: *clbAttr.Address,
-			Provider:   c.provider,
-		})
 	}
 
 	return nil
+}
+
+func (a *apiGatewayProvider) describeApiGroupIds(apiGwClient *apigw.Client) ([]*string, error) {
+	agIds := make([]*string, 0)
+
+	agsReq := &cloudapi.DescribeApiGroupsRequest{}
+	agsResp, err := apiGwClient.DescribeApiGroups(agsReq)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, aga := range agsResp.Body.ApiGroupAttributes.ApiGroupAttribute {
+		agIds = append(agIds, aga.GroupId)
+	}
+
+	pageSize := *agsResp.Body.PageSize
+	totalPages := (*agsResp.Body.TotalCount / pageSize) + 1
+
+	for currentPage := int32(1); currentPage < totalPages; currentPage++ {
+		agsReq.PageNumber = &currentPage
+		agsResp, err = apiGwClient.DescribeApiGroups(agsReq)
+		if err != nil {
+			return nil, err
+		}
+		for _, aga := range agsResp.Body.ApiGroupAttributes.ApiGroupAttribute {
+			agIds = append(agIds, aga.GroupId)
+		}
+	}
+
+	return agIds, nil
 }

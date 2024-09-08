@@ -239,7 +239,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
 
 	if p.shouldRun(utils.AliyunApiGW) {
-		apiGwProv := &apiGatewayProvider{id: p.id, provider: p.provider, config: p.config, apiGWRegions: nil}
+		apiGwProv := &apiGatewayProvider{id: p.id, provider: p.provider, config: p.config, apiGWRegions: p.apiGwRegions}
 		apiGwList, err = apiGwProv.GetResource()
 		gologger.Info().Msgf("获取到 %d 条阿里云 ApiGateway 信息", len(apiGwList.GetItems()))
 		if err != nil {
@@ -324,6 +324,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	}
 
 	finalList := schema.NewResources()
+	finalList.Merge(apiGwList)
 	finalList.Merge(cdnList)
 	finalList.Merge(dcdnList)
 	finalList.Merge(clbList)

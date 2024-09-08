@@ -136,9 +136,11 @@ func (c *classicLoadBalancerProvider) describeClbMeta(regions []string) ([]Resou
 			clbMs = append(clbMs, ResourceMeta{*lb.LoadBalancerId, region})
 		}
 
-		maxPage := *lbsResp.Body.TotalCount
-		for i := int32(1); i < maxPage; i++ {
-			lbReq.PageNumber = &i
+		pageSize := *lbsResp.Body.PageSize
+		totalPages := (*lbsResp.Body.TotalCount / pageSize) + 1
+
+		for currentPage := int32(1); currentPage < totalPages; currentPage++ {
+			lbReq.PageNumber = &currentPage
 			lbsResp, err = clbClient.DescribeLoadBalancers(lbReq)
 			if err != nil {
 				return nil, err
