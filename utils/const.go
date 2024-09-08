@@ -21,13 +21,14 @@ const (
 )
 
 const (
-	AllService = "all"
-	AliyunCDN  = "cdn"
-	AliyunDCDN = "dcdn"
-	AliyunCLB  = "clb"
-	AliyunECS  = "ecs"
-	AliyunES   = "es"
-	AliyunFC   = "fc"
-	AliyunOSS  = "oss"
-	AliyunRDS  = "rds"
+	AllService  = "all"
+	AliyunApiGW = "apigateway"
+	AliyunCDN   = "cdn"
+	AliyunDCDN  = "dcdn"
+	AliyunCLB   = "clb"
+	AliyunECS   = "ecs"
+	AliyunES    = "es"
+	AliyunFC    = "fc"
+	AliyunOSS   = "oss"
+	AliyunRDS   = "rds"
 )

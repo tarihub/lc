@@ -3,6 +3,7 @@ package aliyun
 import (
 	"context"
 	"fmt"
+	apigw "github.com/alibabacloud-go/cloudapi-20160714/v5/client"
 	es "github.com/alibabacloud-go/elasticsearch-20170613/v3/client"
 	slb "github.com/alibabacloud-go/slb-20140515/v4/client"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
@@ -18,16 +19,17 @@ import (
 )
 
 type Provider struct {
-	id         string
-	provider   string
-	config     providerConfig
-	ossClient  *oss.Client
-	clbRegions *slb.DescribeRegionsResponse
-	ecsRegions *ecs.DescribeRegionsResponse
-	esRegions  *es.DescribeRegionsResponse
-	rdsRegions *rds.DescribeRegionsResponse
-	fcRegions  []FcRegion
-	identity   *sts.GetCallerIdentityResponse
+	id           string
+	provider     string
+	config       providerConfig
+	ossClient    *oss.Client
+	apiGwRegions *apigw.DescribeRegionsResponse
+	clbRegions   *slb.DescribeRegionsResponse
+	ecsRegions   *ecs.DescribeRegionsResponse
+	esRegions    *es.DescribeRegionsResponse
+	rdsRegions   *rds.DescribeRegionsResponse
+	fcRegions    []FcRegion
+	identity     *sts.GetCallerIdentityResponse
 }
 
 type providerConfig struct {
@@ -103,6 +105,21 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, err
 	}
 	gologger.Debug().Msg("阿里云 STS 信息获取成功")
+
+	// apigateway client
+	apiGwProvider := &apiGatewayProvider{id: id, provider: utils.Aliyun, config: config}
+	apiGwConfig := apiGwProvider.newApiGwConfig(region)
+	apiGwClient, err := apigw.NewClient(apiGwConfig)
+	if err != nil {
+		gologger.Debug().Msgf("%s endpoint NewClient err: %s", *apiGwClient.Endpoint, err)
+		return nil, err
+	}
+	// apigateway regions
+	apiGwRegions, err := apiGwClient.DescribeRegions(&apigw.DescribeRegionsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	gologger.Debug().Msg("阿里云 ApiGateway 区域信息获取成功")
 
 	// oss client
 	ossClient, err := oss.New(fmt.Sprintf("oss-%s.aliyuncs.com", region), accessKeyID, accessKeySecret)
@@ -199,7 +216,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	gologger.Debug().Msgf("阿里云 FC 区域信息获取成功, 共 %d 个\n", len(fcRegions))
 
 	return &Provider{
-		provider: utils.Aliyun, id: id, config: config, identity: identity,
+		provider: utils.Aliyun, id: id, config: config, identity: identity, apiGwRegions: apiGwRegions,
 		ossClient: ossClient, clbRegions: clbRegions, ecsRegions: ecsRegions, esRegions: esRegions,
 		rdsRegions: rdsRegions, fcRegions: fcRegions,
 	}, nil
@@ -220,6 +237,15 @@ func (p *Provider) shouldRun(t string) bool {
 
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
+
+	if p.shouldRun(utils.AliyunApiGW) {
+		apiGwProv := &apiGatewayProvider{id: p.id, provider: p.provider, config: p.config, apiGWRegions: nil}
+		apiGwList, err = apiGwProv.GetResource()
+		gologger.Info().Msgf("获取到 %d 条阿里云 ApiGateway 信息", len(apiGwList.GetItems()))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if p.shouldRun(utils.AliyunCDN) {
 		cdnProv := &cdnProvider{id: p.id, provider: p.provider, config: p.config}

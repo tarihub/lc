@@ -32,7 +32,7 @@ func (c *classicLoadBalancerProvider) GetResource() (*schema.Resources, error) {
 		clbMs, err = c.describeClbMeta(regions)
 		if err != nil {
 			gologger.Debug().Msgf("调用 clb describeClbMeta 失败: %v\n", err)
-			return esList, nil
+			return clbList, nil
 		}
 	} else {
 		for _, clbr := range clbResources {
